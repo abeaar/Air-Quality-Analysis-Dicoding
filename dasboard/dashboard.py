@@ -6,7 +6,7 @@ import seaborn as sns
 import streamlit as st
 
 # Define the path to the dataset directory
-data_dir = r'D:\PROGRAM\Dicoding\Submisison\dataset'  # Update this path to where your files are located
+data_dir = r'..\dataset'  # Update this path to where your files are located
 
 # Load datasets (sesuaikan path file Anda)
 @st.cache
@@ -103,17 +103,6 @@ sns.scatterplot(data=filtered_data, x='WSPM', y='PM2.5')
 plt.title('Wind Speed vs PM2.5')
 st.pyplot(plt)
 
-# Analysis 4: Seasonal Variation in Air Quality
-st.subheader(f'Seasonal Variation in PM2.5 Levels at {station_filter}')
-filtered_data['month'] = pd.to_datetime(filtered_data['month'].astype(str), format='%m').dt.month_name()
-seasonal_avg = filtered_data.groupby('month')['PM2.5'].mean()
-st.bar_chart(seasonal_avg)
-
-
-# Analysis 5: Air Quality Improvement Over Time
-st.subheader(f'Air Quality Improvement in {station_filter} (PM2.5 Over Time)')
-improvement = filtered_data.groupby('year')['PM2.5'].mean()
-st.line_chart(improvement)
 
 # Analysis 6: Rainfall and Air Quality
 st.subheader(f'Impact of Rainfall on PM2.5 Levels in {station_filter}')
@@ -189,23 +178,6 @@ filtered_data = filtered_data.dropna(subset=['wd', 'PM2.5'])
 
 # Konversi kolom 'wd' menjadi kategori jika perlu
 filtered_data['wd'] = filtered_data['wd'].astype('category')
-
-# Analysis 10: Correlation Between Environmental Factors and Air Quality
-if 'wd' in filtered_data.columns and 'PM2.5' in filtered_data.columns:
-    st.subheader('Distribution of Pollutants by Wind Direction')
-    plt.figure(figsize=(12, 8))
-    
-    # Pastikan data 'wd' sudah dikategorikan
-    filtered_data['wd'] = filtered_data['wd'].astype('category')
-    
-    sns.boxplot(data=filtered_data, x='wd', y='PM2.5')
-    plt.title('PM2.5 Distribution by Wind Direction')
-    plt.xlabel('Wind Direction')
-    plt.ylabel('PM2.5 (µg/m³)')
-    st.pyplot(plt)
-else:
-    st.error("Columns 'wd' or 'PM2.5' are missing from the data.")
-
 
 # More visualizations or analysis can be added based on the previous questions
 st.write('This dashboard allows you to explore air quality data interactively.')
