@@ -6,10 +6,10 @@ import seaborn as sns
 import streamlit as st
 
 # Define the path to the dataset directory
-data_dir = r'../dataset'  # Update this path to where your files are located
+data_dir = r'./dataset'  # Update this path to where your files are located
 
 # Load datasets (sesuaikan path file Anda)
-@st.cache
+@st.cache_data
 def load_data():
     dfs = [
         'PRSA_Data_Aotizhongxin_20130301-20170228.csv',
