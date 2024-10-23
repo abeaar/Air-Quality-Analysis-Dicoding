@@ -1,183 +1,172 @@
-import os
-
-import matplotlib.pyplot as plt
-import pandas as pd
-import seaborn as sns
 import streamlit as st
+import os
+import base64
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import padding
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP
 
-# Define the path to the dataset directory
-data_dir = r'./dataset'  # Update this path to where your files are located
-
-# Load datasets (sesuaikan path file Anda)
-@st.cache_data
-def load_data():
-    dfs = [
-        'PRSA_Data_Aotizhongxin_20130301-20170228.csv',
-        'PRSA_Data_Changping_20130301-20170228.csv',
-        'PRSA_Data_Dingling_20130301-20170228.csv',
-        'PRSA_Data_Dongsi_20130301-20170228.csv',
-        'PRSA_Data_Guanyuan_20130301-20170228.csv',
-        'PRSA_Data_Gucheng_20130301-20170228.csv',
-        'PRSA_Data_Huairou_20130301-20170228.csv',
-        'PRSA_Data_Nongzhanguan_20130301-20170228.csv',
-        'PRSA_Data_Shunyi_20130301-20170228.csv',
-        'PRSA_Data_Tiantan_20130301-20170228.csv',
-        'PRSA_Data_Wanliu_20130301-20170228.csv',
-        'PRSA_Data_Wanshouxigong_20130301-20170228.csv'
-    ]
-    
-    # Read and concatenate all datasets
-    dataframes = []
-    for file_name in dfs:
-        file_path = os.path.join(data_dir, file_name)  # Combine directory and file name
-        if os.path.isfile(file_path):
-            df = pd.read_csv(file_path)
-            
-            # Drop 'No' column if it exists
-            if 'No' in df.columns:
-                df = df.drop(['No'], axis=1)
-                
-            # Convert 'year', 'month', 'day', 'hour' to datetime
-            df['datetime'] = pd.to_datetime(df[['year', 'month', 'day', 'hour']])
-            dataframes.append(df)
+# Fungsi Caesar Cipher
+def caesar_cipher(text, key, mode='encrypt'):
+    result = ""
+    key = key if mode == 'encrypt' else -key
+    for char in text:
+        if char.isalpha():
+            shifted = (ord(char.lower()) - 97 + key) % 26 + 97
+            result += chr(shifted)
         else:
-            st.warning(f"File {file_name} tidak ditemukan di path: {file_path}")
-    
-    combined_df = pd.concat(dataframes, ignore_index=True)
-    return combined_df
+            result += char
+    return result
 
-data = load_data()
+# Fungsi Rail Fence Cipher
+def rail_fence(text, key, mode='encrypt'):
+    if mode == 'encrypt':
+        rail = [['\n' for _ in range(len(text))] for _ in range(key)]
+        direction_down, row, col = False, 0, 0
 
-# Set up the Streamlit app
-st.title('Air Quality Data Analytics Dashboard')
+        for char in text:
+            if row == 0 or row == key - 1:
+                direction_down = not direction_down
+            rail[row][col] = char
+            col += 1
+            row += 1 if direction_down else -1
 
-# Sidebar for interactive filters
-st.sidebar.header('Filter Data')
-station_filter = st.sidebar.selectbox('Select Station', data['station'].unique())
-year_filter = st.sidebar.slider('Select Year', int(data['year'].min()), int(data['year'].max()), (2013, 2017))
+        return ''.join([rail[i][j] for i in range(key) for j in range(len(text)) if rail[i][j] != '\n'])
 
-# Filter data based on user input
-filtered_data = data[(data['station'] == station_filter) & (data['year'] >= year_filter[0]) & (data['year'] <= year_filter[1])]
+    else:  # dekripsi
+        rail = [['\n' for _ in range(len(text))] for _ in range(key)]
+        direction_down, row, col = None, 0, 0
 
-# Display filtered data
-st.subheader(f'Filtered Data for Station: {station_filter} (Year {year_filter[0]} - {year_filter[1]})')
-st.write(filtered_data.head())
+        for i in range(len(text)):
+            if row == 0:
+                direction_down = True
+            if row == key - 1:
+                direction_down = False
+            rail[row][col] = '*'
+            col += 1
+            row += 1 if direction_down else -1
 
-# Visualizations
-st.subheader('PM2.5 Concentration Over Time')
-plt.figure(figsize=(10, 6))
-sns.lineplot(data=filtered_data, x='datetime', y='PM2.5', color='blue')
-plt.title(f'Trend of PM2.5 Concentration in {station_filter}')
-plt.xlabel('Time')
-plt.ylabel('PM2.5 (µg/m³)')
-st.pyplot(plt)
+        index = 0
+        for i in range(key):
+            for j in range(len(text)):
+                if rail[i][j] == '*' and index < len(text):
+                    rail[i][j] = text[index]
+                    index += 1
 
-# Correlation heatmap
-st.subheader('Correlation Between Environmental Factors')
-# Select only numeric columns for correlation analysis
-numeric_data = filtered_data.select_dtypes(include=['number'])
-correlation = numeric_data.corr()
-plt.figure(figsize=(10, 8))
-sns.heatmap(correlation, annot=True, cmap='coolwarm', linewidths=0.5)
-plt.title('Correlation Heatmap of Air Quality and Environmental Factors')
-st.pyplot(plt)
+        result = []
+        row, col = 0, 0
+        for i in range(len(text)):
+            if row == 0:
+                direction_down = True
+            if row == key - 1:
+                direction_down = False
+            if rail[row][col] != '\n':
+                result.append(rail[row][col])
+            col += 1
+            row += 1 if direction_down else -1
 
-# Analysis 1: Distribution of PM2.5
-st.subheader(f'Distribution of PM2.5 in {station_filter}')
-plt.figure(figsize=(10, 6))
-sns.histplot(filtered_data['PM2.5'], bins=30, kde=True)
-plt.title(f'Distribution of PM2.5 Levels in {station_filter}')
-st.pyplot(plt)
+        return ''.join(result)
 
-# Analysis 2: Average Concentration by Year
-st.subheader(f'Average Concentration of Pollutants by Year at {station_filter}')
-# Select only numeric columns for mean calculation
-numeric_data = filtered_data.select_dtypes(include=['number'])
-yearly_data = numeric_data.groupby(filtered_data['year']).mean()
-st.line_chart(yearly_data[['PM2.5', 'PM10', 'SO2', 'NO2', 'CO', 'O3']])
+# Fungsi AES Cipher
+def aes_encrypt(plain_text, key):
+    iv = os.urandom(16)
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    encryptor = cipher.encryptor()
 
-# Analysis 3: Wind Speed and PM2.5 Relationship
-st.subheader(f'Relationship Between Wind Speed and PM2.5 in {station_filter}')
-plt.figure(figsize=(10, 6))
-sns.scatterplot(data=filtered_data, x='WSPM', y='PM2.5')
-plt.title('Wind Speed vs PM2.5')
-st.pyplot(plt)
+    padder = padding.PKCS7(algorithms.AES.block_size).padder()
+    padded_data = padder.update(plain_text.encode()) + padder.finalize()
+    encrypted = encryptor.update(padded_data) + encryptor.finalize()
 
+    return base64.b64encode(iv + encrypted).decode()
 
-# Analysis 6: Rainfall and Air Quality
-st.subheader(f'Impact of Rainfall on PM2.5 Levels in {station_filter}')
-plt.figure(figsize=(10, 6))
-sns.scatterplot(data=filtered_data, x='RAIN', y='PM2.5', color='green')
-plt.title('Rainfall vs PM2.5')
-st.pyplot(plt)
+def aes_decrypt(encrypted_text, key):
+    encrypted_data = base64.b64decode(encrypted_text)
+    iv, encrypted_message = encrypted_data[:16], encrypted_data[16:]
 
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    decryptor = cipher.decryptor()
+    padded_data = decryptor.update(encrypted_message) + decryptor.finalize()
 
-# Analysis 7: Relationship Between Wind Speed and Air Quality
-st.subheader('Relationship Between Wind Speed and Air Quality')
-plt.figure(figsize=(10, 6))
-sns.scatterplot(data=filtered_data, x='WSPM', y='PM2.5', color='blue')
-plt.title('Wind Speed vs PM2.5')
-plt.xlabel('Wind Speed (WSPM)')
-plt.ylabel('PM2.5 (µg/m³)')
-st.pyplot(plt)
+    unpadder = padding.PKCS7(algorithms.AES.block_size).unpadder()
+    return unpadder.update(padded_data) + unpadder.finalize().decode()
 
-# Calculate correlation between Wind Speed and various pollutants
-correlation_ws = filtered_data[['WSPM', 'PM2.5', 'PM10', 'SO2', 'NO2', 'CO', 'O3']].corr()
-st.subheader('Correlation Between Wind Speed and Pollutants')
-# Konversi kolom yang bisa dikonversi ke tipe numerik
-for col in filtered_data.columns:
-    if filtered_data[col].dtype == 'object':
-        filtered_data[col] = pd.to_numeric(filtered_data[col], errors='coerce')
+# Fungsi RSA Cipher
+def generate_rsa_keys():
+    key = RSA.generate(2048)
+    return key.export_key(), key.publickey().export_key()
 
-# Analysis 8: Daily Fluctuations in Air Quality
-st.subheader('Daily Fluctuations in Air Quality')
+def rsa_encrypt(plain_text, public_key):
+    rsa_key = RSA.import_key(public_key)
+    cipher = PKCS1_OAEP.new(rsa_key)
+    return base64.b64encode(cipher.encrypt(plain_text.encode())).decode()
 
-# Konversi kolom 'datetime' jika perlu
-if 'datetime' in filtered_data.columns:
-    try:
-        # Konversi 'datetime' menjadi tipe datetime
-        filtered_data['datetime'] = pd.to_datetime(filtered_data['datetime'], errors='coerce')
-        # Set 'datetime' sebagai index dan resample data harian
-        filtered_data.set_index('datetime', inplace=True)
-        
-        # Hanya ambil kolom numerik untuk analisis
-        numeric_data = filtered_data.select_dtypes(include=['float64', 'int64'])
-        
-        # Resample dan hitung rata-rata
-        daily_data = numeric_data.resample('D').mean()
+def rsa_decrypt(encrypted_text, private_key):
+    rsa_key = RSA.import_key(private_key)
+    cipher = PKCS1_OAEP.new(rsa_key)
+    return cipher.decrypt(base64.b64decode(encrypted_text)).decode()
 
-        # Plot tren harian untuk masing-masing polutan
-        plt.figure(figsize=(14, 7))
-        if 'PM2.5' in daily_data.columns:
-            sns.lineplot(data=daily_data, x=daily_data.index, y='PM2.5', label='PM2.5')
-        if 'PM10' in daily_data.columns:
-            sns.lineplot(data=daily_data, x=daily_data.index, y='PM10', label='PM10')
-        plt.title('Daily Trend of Air Quality')
-        plt.xlabel('Date')
-        plt.ylabel('Concentration')
-        plt.legend()
-        st.pyplot(plt)
+# Streamlit UI
+st.title("Kriptografi Kelompok Wlewle")
 
-    except Exception as e:
-        st.error(f"Error during analysis: {e}")
-else:
-    st.error("'datetime' column is missing or incorrectly formatted.")
+menu = st.sidebar.selectbox("Pilih Metode", ["Caesar Cipher", "Rail Fence", "AES", "RSA"])
 
+if menu == "Caesar Cipher":
+    st.header("Caesar Cipher")
+    text = st.text_input("Masukkan Teks")
+    key = st.number_input("Masukkan Key", min_value=1, max_value=25, step=1)
+    mode = st.radio("Mode", ["Encrypt", "Decrypt"])
 
-# Analysis 9: Long-Term Trends in Air Quality
-st.subheader('Long-Term Trends in Air Quality')
-annual_data = filtered_data.groupby('year').mean()
-st.line_chart(annual_data[['PM2.5', 'PM10', 'SO2', 'NO2', 'CO', 'O3']])
-plt.title('Annual Trends in Air Quality')
-plt.xlabel('Year')
-plt.ylabel('Average Concentration')
-st.pyplot(plt)
+    if st.button("Proses"):
+        result = caesar_cipher(text, key, mode.lower())
+        st.write(f"Hasil: {result}")
 
-# Hapus baris dengan nilai kosong di kolom 'wd' atau 'PM2.5'
-filtered_data = filtered_data.dropna(subset=['wd', 'PM2.5'])
+elif menu == "Rail Fence":
+    st.header("Rail Fence Cipher")
+    text = st.text_input("Masukkan Teks")
+    key = st.number_input("Masukkan Key", min_value=2, step=1)
+    mode = st.radio("Mode", ["Encrypt", "Decrypt"])
 
-# Konversi kolom 'wd' menjadi kategori jika perlu
-filtered_data['wd'] = filtered_data['wd'].astype('category')
+    if st.button("Proses"):
+        result = rail_fence(text, key, mode.lower())
+        st.write(f"Hasil: {result}")
 
-# More visualizations or analysis can be added based on the previous questions
-st.write('This dashboard allows you to explore air quality data interactively.')
+elif menu == "AES":
+    st.header("AES Cipher")
+    key = os.urandom(32)  # Kunci AES 256-bit
+    mode = st.radio("Mode", ["Encrypt", "Decrypt"])
+
+    if mode == "Encrypt":
+        text = st.text_input("Masukkan Teks")
+        if st.button("Proses"):
+            result = aes_encrypt(text, key)
+            st.write(f"Hasil Enkripsi: {result}")
+            st.write(f"Kunci (hex): {key.hex()}")
+
+    else:
+        encrypted_text = st.text_input("Masukkan Teks Terenkripsi")
+        key_hex = st.text_input("Masukkan Kunci (hex)")
+        if st.button("Proses"):
+            key = bytes.fromhex(key_hex)
+            result = aes_decrypt(encrypted_text, key)
+            st.write(f"Hasil Dekripsi: {result}")
+
+elif menu == "RSA":
+    st.header("RSA Cipher")
+    private_key, public_key = generate_rsa_keys()
+    st.text_area("Kunci Publik", public_key.decode())
+    st.text_area("Kunci Privat", private_key.decode())
+    mode = st.radio("Mode", ["Encrypt", "Decrypt"])
+
+    if mode == "Encrypt":
+        text = st.text_input("Masukkan Teks")
+        if st.button("Proses"):
+            result = rsa_encrypt(text, public_key)
+            st.write(f"Hasil Enkripsi: {result}")
+
+    else:
+        encrypted_text = st.text_input("Masukkan Teks Terenkripsi")
+        private_key_input = st.text_area("Masukkan Kunci Privat")
+        if st.button("Proses"):
+            result = rsa_decrypt(encrypted_text, private_key_input)
+            st.write(f"Hasil Dekripsi: {result}")
